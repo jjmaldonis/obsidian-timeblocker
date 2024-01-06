@@ -37,7 +37,7 @@ export default class MyPlugin extends Plugin {
 		// This adds an editor command that can perform some operation on the current editor instance
 		this.addCommand({
 			id: 'schedule-tasks',
-			name: 'Schedule',
+			name: 'Schedule / Reschedule',
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				let selection = editor.getSelection();
 				const notice = new Notice("Scheduling tasks...", 0);
@@ -74,6 +74,45 @@ export default class MyPlugin extends Plugin {
 				}
 				const replacement = todosAsText.join("\n");
 				editor.replaceSelection(replacement);
+
+				notice.hide();
+			}
+		});
+
+		this.addCommand({
+			id: 'resort-tasks-by-completion',
+			name: 'Resort Tasks By Completion',
+			editorCallback: (editor: Editor, view: MarkdownView) => {
+				let selection = editor.getSelection();
+				const notice = new Notice("Reordering tasks...", 0);
+
+				let complete: string[] = [];
+				let incomplete: string[] = [];
+				let unknownLines: string[] = [];
+				let lastPlaced: string | undefined = undefined;
+				let lines = selection.split("\n");
+				for (let i = 0; i < lines.length; i++) {
+					let line = lines[i];
+					if (line.startsWith("- [ ]")) {
+						incomplete.push(line);
+						lastPlaced = "INCOMPLETE";
+					} else if (line.startsWith("- [x]")) {
+						complete.push(line);
+						lastPlaced = "COMPLETE";
+					} else if (line.startsWith("  ")) {
+						if (lastPlaced === "COMPLETE") {
+							complete.push(line);
+						} else if (lastPlaced === "INCOMPLETE") {
+							incomplete.push(line);
+						} else {
+							unknownLines.push(line)
+						}
+					} else {
+						unknownLines.push(line);
+					}
+				}
+				const replacement = complete.join("\n") + "\n" + incomplete.join("\n") + "\n" + unknownLines.join("\n");
+				editor.replaceSelection(replacement.trim());
 
 				notice.hide();
 			}
