@@ -36,7 +36,7 @@ export default class MyPlugin extends Plugin {
 
 		// This adds an editor command that can perform some operation on the current editor instance
 		this.addCommand({
-			id: 'schedule-tasks',
+			id: 'timeblocker-schedule-tasks',
 			name: 'Schedule / Reschedule',
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				let selection = editor.getSelection();
@@ -56,7 +56,7 @@ export default class MyPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: 'unschedule-tasks',
+			id: 'timeblocker-unschedule-tasks',
 			name: 'Unschedule',
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				let selection = editor.getSelection();
@@ -80,7 +80,7 @@ export default class MyPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: 'resort-tasks-by-completion',
+			id: 'timeblocker-resort-tasks-by-completion',
 			name: 'Resort Tasks By Completion',
 			editorCallback: (editor: Editor, view: MarkdownView) => {
 				let selection = editor.getSelection();
