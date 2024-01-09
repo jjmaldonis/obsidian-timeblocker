@@ -1,5 +1,11 @@
-import { App, Editor, MarkdownView, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import OpenAI from 'openai';
+import { getFAIcon } from './utils';
+import { faBars } from '@fortawesome/free-solid-svg-icons';
+
+function generateId(): string {
+	return Math.random().toString(36).substr(2, 6);
+}
 
 interface TodoWithSchedule {
 	timeString: string;
@@ -120,6 +126,77 @@ export default class MyPlugin extends Plugin {
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new TimeblockingSettingsTab(this.app, this));
+
+		this.registerMarkdownPostProcessor((el: HTMLElement, cts: MarkdownPostProcessorContext) => {
+			this.recursivelyRenderListElements(el, cts);
+		}, 999999999999999);
+	}
+
+	recursivelyRenderListElements(el: HTMLElement, cts: MarkdownPostProcessorContext) {
+		if (el.hasChildNodes()) {
+			el.childNodes.forEach((child: ChildNode) => {
+				if (child instanceof HTMLElement) {
+					this.recursivelyRenderListElements(child, cts);
+				}
+			});
+		}
+		if (el.classList.contains("task-list-item")) {
+			// As of Obsidian 1.3.0, it is required by Obsidian to create and/or pass a Component object
+			// when using its Markdown rendering methods
+			const childComponent = new MarkdownRenderChild(el);
+			cts.addChild(childComponent);
+
+			function dragstartHandler(ev: any) {
+				// Add the target element's id to the data transfer object
+				if (ev.stopPropagation) ev.stopPropagation();
+				if (ev.preventDefault) ev.preventDefault();
+				ev.cancelBubble = true;
+				ev.returnValue = false;
+				ev.dataTransfer.setData("text/plain", ev.target.id);
+				ev.dataTransfer.effectAllowed = "move";
+				// propagate up until we find the list item
+				let li = ev.target as HTMLElement;
+				while (li && !li.hasClass("task-list-item")) {
+					li = li.parentElement as HTMLElement;
+				}
+				console.log("Drag start: ", li.outerText);
+				return false;
+			}
+
+			function dragoverHandler(ev: any) {
+				ev.preventDefault();
+				ev.dataTransfer.dropEffect = "move";
+			}
+
+			let dropHandler = (ev: any) => {
+				// ev.preventDefault();
+				const tfile = this.app.workspace.getActiveFile();
+				if (tfile !== null) {
+					this.app.vault.process(tfile, (data: string) => {
+						return data + "\n WOO!";
+					});
+				}
+				console.log("Drop: ", ev.target.outerText);
+			}
+			dropHandler = dropHandler.bind(this);
+
+			// const icon = getFAIcon(faBars).node[0] as HTMLElement;
+			const icon = el.createDiv();
+			icon.appendChild(getFAIcon(faBars).node[0]);
+			icon.id = generateId();
+			icon.draggable = true;
+			icon.ondragstart = dragstartHandler;
+			icon.addClass("svg-inline--fa");
+			icon.addClass("timeblocking-moveable-task-item")
+			el.addEventListener("dragstart", dragstartHandler);
+			if (icon !== undefined) {
+				el.prepend(icon, el.childNodes.item(0));
+				el.replaceWith(el);
+			}
+			el.ondrop = dropHandler;
+			el.ondragover = dragoverHandler;
+			// el.addClass("timeblocking-flex");
+		}
 	}
 
 	async parseTodosWithSchedule(text: string): Promise<TodoWithSchedule[]> {
