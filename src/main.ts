@@ -1,7 +1,8 @@
-import { App, Editor, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, Notice, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, Editor, MarkdownPostProcessorContext, MarkdownRenderChild, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, ToggleComponent } from 'obsidian';
 import OpenAI from 'openai';
 import { getFAIcon } from './utils';
 import { faBars } from '@fortawesome/free-solid-svg-icons';
+import 'drag-drop-touch';
 
 function generateId(): string {
 	return Math.random().toString(36).substr(2, 6);
@@ -16,6 +17,7 @@ interface TodoWithSchedule {
 
 interface TimeblockingSettings {
 	openAiApiKey: string;
+	moveable: boolean,
 }
 
 interface DurationJSON {
@@ -25,7 +27,8 @@ interface DurationJSON {
 }
 
 const DEFAULT_SETTINGS: TimeblockingSettings = {
-	openAiApiKey: ''
+	openAiApiKey: '',
+	moveable: true,
 }
 
 export default class MyPlugin extends Plugin {
@@ -93,6 +96,8 @@ export default class MyPlugin extends Plugin {
 				const notice = new Notice("Reordering tasks...", 0);
 
 				let complete: string[] = [];
+				let cancelled: string[] = [];
+				let inprogress: string[] = [];
 				let incomplete: string[] = [];
 				let unknownLines: string[] = [];
 				let lastPlaced: string | undefined = undefined;
@@ -105,15 +110,32 @@ export default class MyPlugin extends Plugin {
 					} else if (line.startsWith("- [x]")) {
 						complete.push(line);
 						lastPlaced = "COMPLETE";
-					} else if (line.startsWith("  ")) {
+					} else if (line.startsWith("- [-]")) {
+						cancelled.push(line);
+						lastPlaced = "CANCELLED";
+					} else if (line.startsWith("- [/]")) {
+						inprogress.push(line);
+						lastPlaced = "INPROGRESS";
+					} else if (line.startsWith("  ") || line.startsWith("	")) {
+						console.log(line);
 						if (lastPlaced === "COMPLETE") {
+							console.log("adding to COMPLETE")
 							complete.push(line);
+						} else if (lastPlaced === "CANCELLED") {
+							console.log("adding to CANCELLED")
+							cancelled.push(line);
+						} else if (lastPlaced === "INPROGRESS") {
+							console.log("adding to INPROGRESS")
+							inprogress.push(line);
 						} else if (lastPlaced === "INCOMPLETE") {
+							console.log("adding to INCOMPLETE")
 							incomplete.push(line);
 						} else {
+							console.log("UNKNOWN", line)
 							unknownLines.push(line)
 						}
 					} else {
+						console.log("UNKNOWN0", line)
 						unknownLines.push(line);
 					}
 				}
@@ -140,7 +162,7 @@ export default class MyPlugin extends Plugin {
 				}
 			});
 		}
-		if (el.classList.contains("task-list-item")) {
+		if (this.settings.moveable && el.classList.contains("task-list-item") && !(el.childNodes.item(0) as HTMLElement).hasClass("timeblocker-moveable-task-item")) {
 			// As of Obsidian 1.3.0, it is required by Obsidian to create and/or pass a Component object
 			// when using its Markdown rendering methods
 			const childComponent = new MarkdownRenderChild(el);
@@ -198,7 +220,6 @@ export default class MyPlugin extends Plugin {
 			}
 			dropHandler = dropHandler.bind(this);
 
-			// const icon = getFAIcon(faBars).node[0] as HTMLElement;
 			const icon = el.createDiv();
 			icon.appendChild(getFAIcon(faBars).node[0]);
 			icon.id = generateId();
@@ -545,7 +566,7 @@ class TimeblockingSettingsTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
-	display(): void {
+	async display(): Promise<void> {
 		const { containerEl } = this;
 
 		containerEl.empty();
@@ -559,6 +580,16 @@ class TimeblockingSettingsTab extends PluginSettingTab {
 					this.plugin.settings.openAiApiKey = value;
 					await this.plugin.saveSettings();
 				}));
+
+		new Setting(containerEl)
+			.setName('Enable drag and drop')
+			.addToggle((toggle: ToggleComponent) => {
+				toggle.setValue(this.plugin.settings.moveable)
+					.onChange(async (value: boolean) => {
+						this.plugin.settings.moveable = value;
+						await this.plugin.saveSettings();
+					})
+			});
 	}
 }
 
